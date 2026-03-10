@@ -1,52 +1,74 @@
-import requests
+import asyncio
 import json
 import os
-import re
+import requests
+from playwright.async_api import async_playwright
 
 TARGET = "shizenboueigun"
-WEBHOOK = os.getenv("DISCORD_WEBHOOK")
+
+DISCORD_WEBHOOK = os.getenv("DISCORD_WEBHOOK")
+X_USER = os.getenv("X_USER")
+X_PASS = os.getenv("X_PASS")
+
 STATE_FILE = "following.json"
 
 
-def get_following():
+async def get_following():
 
-    url = f"https://x.com/{TARGET}/following"
+    users = []
 
-    headers = {"User-Agent": "Mozilla/5.0"}
+    async with async_playwright() as p:
 
-    r = requests.get(url, headers=headers)
+        browser = await p.chromium.launch(headless=True)
 
-    users = re.findall(r'"/([A-Za-z0-9_]+)/followers"', r.text)
+        page = await browser.new_page()
 
-    users = list(set(users))
+        await page.goto("https://x.com/login")
 
-    result = []
+        await page.fill('input[name="text"]', X_USER)
+        await page.keyboard.press("Enter")
 
-    for u in users:
-        result.append({
-            "username": u,
-            "name": u,
-            "icon": f"https://unavatar.io/twitter/{u}"
-        })
+        await page.wait_for_timeout(2000)
 
-    return result
+        await page.fill('input[name="password"]', X_PASS)
+        await page.keyboard.press("Enter")
+
+        await page.wait_for_timeout(5000)
+
+        await page.goto(f"https://x.com/{TARGET}/following")
+
+        await page.wait_for_timeout(5000)
+
+        links = await page.query_selector_all("a[href*='/']")
+
+        for link in links:
+
+            href = await link.get_attribute("href")
+
+            if href and href.count("/") == 1 and href != f"/{TARGET}":
+
+                users.append(href.replace("/",""))
+
+        await browser.close()
+
+    return list(set(users))
 
 
 def send_embed(title, user, color):
 
     embed = {
         "title": title,
-        "description": f"[{user['name']} (@{user['username']})](https://x.com/{user['username']})",
-        "color": color,
-        "thumbnail": {"url": user["icon"]}
+        "description": f"https://x.com/{user}",
+        "color": color
     }
 
-    requests.post(WEBHOOK, json={"embeds":[embed]})
+    requests.post(DISCORD_WEBHOOK, json={"embeds":[embed]})
 
 
 def load_state():
 
     if os.path.exists(STATE_FILE):
+
         with open(STATE_FILE) as f:
             return json.load(f)
 
@@ -59,11 +81,9 @@ def save_state(data):
         json.dump(data,f)
 
 
-def main():
+async def main():
 
-    following = get_following()
-
-    usernames = [u["username"] for u in following]
+    following = await get_following()
 
     old = load_state()
 
@@ -74,24 +94,16 @@ def main():
 
     else:
 
-        new = [u for u in following if u["username"] not in old]
-        removed = [u for u in old if u not in usernames]
+        new = [u for u in following if u not in old]
+        removed = [u for u in old if u not in following]
 
         for user in new:
             send_embed("🆕 新しくフォローしました",user,3066993)
 
         for user in removed:
+            send_embed("❌ フォロー解除しました",user,15158332)
 
-            fake = {
-                "username":user,
-                "name":user,
-                "icon":f"https://unavatar.io/twitter/{user}"
-            }
-
-            send_embed("❌ フォロー解除しました",fake,15158332)
-
-    save_state(usernames)
+    save_state(following)
 
 
-if __name__ == "__main__":
-    main()
+asyncio.run(main())
