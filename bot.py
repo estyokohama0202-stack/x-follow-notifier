@@ -135,26 +135,22 @@ async def main():
 
     following = await get_following()
 
+    # 毎回最新10件送信
+    for user in following[:10]:
+        send_embed("👀 最近のフォロー", user, 3447003)
+
     old = load_state()
 
-    if old is None:
-
-        for user in following[:10]:
-
-            send_embed("👀 最近のフォロー",user,3447003)
-
-    else:
+    if old:
 
         new = [u for u in following if u not in old]
         removed = [u for u in old if u not in following]
 
         for user in new:
-
-            send_embed("🆕 新しくフォローしました",user,3066993)
+            send_embed("🆕 新しくフォローしました", user, 3066993)
 
         for user in removed:
-
-            send_embed("❌ フォロー解除しました",user,15158332)
+            send_embed("❌ フォロー解除しました", user, 15158332)
 
     save_state(following)
 
