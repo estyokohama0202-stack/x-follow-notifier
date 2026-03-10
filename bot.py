@@ -1,8 +1,7 @@
 import requests
 import json
 import os
-import time
-import snscrape.modules.twitter as sntwitter
+import re
 
 TARGET = "shizenboueigun"
 WEBHOOK = os.getenv("DISCORD_WEBHOOK")
@@ -11,28 +10,29 @@ STATE_FILE = "following.json"
 
 def get_following():
 
-    users = []
+    url = f"https://x.com/{TARGET}/following"
 
-    try:
+    headers = {
+        "User-Agent": "Mozilla/5.0"
+    }
 
-        scraper = sntwitter.TwitterUserScraper(TARGET)
+    r = requests.get(url, headers=headers)
 
-        for i, user in enumerate(scraper.get_items()):
+    users = re.findall(r'"/([A-Za-z0-9_]+)/followers"', r.text)
 
-            if i >= 200:
-                break
+    users = list(set(users))
 
-            users.append({
-                "username": user.username,
-                "name": user.displayname,
-                "icon": user.profileImageUrl
-            })
+    result = []
 
-    except Exception as e:
+    for u in users:
 
-        print("Fetch error:", e)
+        result.append({
+            "username": u,
+            "name": u,
+            "icon": f"https://unavatar.io/twitter/{u}"
+        })
 
-    return users
+    return result
 
 
 def send_embed(title, user, color):
@@ -43,49 +43,31 @@ def send_embed(title, user, color):
         "color": color,
         "thumbnail": {
             "url": user["icon"]
-        },
-        "footer": {
-            "text": "X Follow Monitor"
         }
     }
 
-    try:
-        requests.post(WEBHOOK, json={"embeds": [embed]})
-    except Exception as e:
-        print("Discord error:", e)
+    requests.post(WEBHOOK, json={"embeds":[embed]})
 
 
 def load_state():
 
     if os.path.exists(STATE_FILE):
 
-        try:
-            with open(STATE_FILE) as f:
-                return json.load(f)
-        except:
-            return None
+        with open(STATE_FILE) as f:
+            return json.load(f)
 
     return None
 
 
 def save_state(data):
 
-    try:
-        with open(STATE_FILE,"w") as f:
-            json.dump(data,f)
-    except Exception as e:
-        print("Save error:", e)
+    with open(STATE_FILE,"w") as f:
+        json.dump(data,f)
 
 
 def main():
 
-    print("Checking follows...")
-
     following = get_following()
-
-    if not following:
-        print("Failed to fetch data")
-        return
 
     usernames = [u["username"] for u in following]
 
@@ -93,12 +75,8 @@ def main():
 
     if old is None:
 
-        print("First run")
-
         for user in following[:10]:
-            send_embed("👀 最近のフォロー", user, 3447003)
-
-            time.sleep(1)
+            send_embed("👀 最近のフォロー",user,3447003)
 
     else:
 
@@ -106,10 +84,7 @@ def main():
         removed = [u for u in old if u not in usernames]
 
         for user in new:
-
-            send_embed("🆕 新しくフォローしました", user, 3066993)
-
-            time.sleep(1)
+            send_embed("🆕 新しくフォローしました",user,3066993)
 
         for user in removed:
 
@@ -119,13 +94,9 @@ def main():
                 "icon":f"https://unavatar.io/twitter/{user}"
             }
 
-            send_embed("❌ フォロー解除しました", fake, 15158332)
-
-            time.sleep(1)
+            send_embed("❌ フォロー解除しました",fake,15158332)
 
     save_state(usernames)
-
-    print("Done")
 
 
 if __name__ == "__main__":
