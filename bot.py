@@ -3,45 +3,65 @@ import json
 import os
 import snscrape.modules.twitter as sntwitter
 
-USERNAME = "shizenboueigun"
+TARGET = "shizenboueigun"
 WEBHOOK = os.getenv("DISCORD_WEBHOOK")
 STATE_FILE = "following.json"
 
 
 def get_following():
+
     users = []
-    for i, user in enumerate(sntwitter.TwitterUserScraper(USERNAME).get_items()):
-        if i > 200:
+
+    scraper = sntwitter.TwitterUserScraper(TARGET)
+
+    for i, user in enumerate(scraper.get_items()):
+
+        if i > 300:
             break
-        users.append(user.username)
+
+        users.append({
+            "username": user.username,
+            "name": user.displayname,
+            "icon": user.profileImageUrl
+        })
+
     return users
 
 
-def send_embed(user, first=False):
+def send_embed(user, mode):
 
-    title = "👀 最近フォロー" if first else "🆕 新しいフォロー"
+    if mode == "follow":
+        title = "🆕 新しいフォロー"
+        color = 3066993
+
+    elif mode == "unfollow":
+        title = "❌ フォロー解除"
+        color = 15158332
+
+    else:
+        title = "👀 最近フォロー"
+        color = 3447003
 
     embed = {
         "title": title,
-        "description": f"[@{user}](https://x.com/{user})",
-        "color": 1942002,
+        "description": f"[{user['name']} (@{user['username']})](https://x.com/{user['username']})",
+        "color": color,
         "thumbnail": {
-            "url": f"https://unavatar.io/twitter/{user}"
+            "url": user["icon"]
         },
         "footer": {
             "text": "X Follow Monitor"
         }
     }
 
-    data = {
-        "embeds": [embed]
-    }
-
-    requests.post(WEBHOOK, json=data)
+    requests.post(WEBHOOK, json={"embeds":[embed]})
 
 
 def main():
+
     following = get_following()
+
+    usernames = [u["username"] for u in following]
 
     try:
         with open(STATE_FILE) as f:
@@ -50,15 +70,28 @@ def main():
         old = None
 
     if old is None:
-        for u in following[:10]:
-            send_embed(u, True)
-    else:
-        new = [u for u in following if u not in old]
-        for u in new:
-            send_embed(u)
 
-    with open(STATE_FILE, "w") as f:
-        json.dump(following, f)
+        for user in following[:10]:
+            send_embed(user,"first")
+
+    else:
+
+        new = [u for u in following if u["username"] not in old]
+        removed = [u for u in old if u not in usernames]
+
+        for user in new:
+            send_embed(user,"follow")
+
+        for user in removed:
+            fake = {
+                "username":user,
+                "name":user,
+                "icon":f"https://unavatar.io/twitter/{user}"
+            }
+            send_embed(fake,"unfollow")
+
+    with open(STATE_FILE,"w") as f:
+        json.dump(usernames,f)
 
 
 if __name__ == "__main__":
