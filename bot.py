@@ -12,18 +12,24 @@ def get_following():
 
     users = []
 
-    scraper = sntwitter.TwitterUserScraper(TARGET)
+    try:
 
-    for i, user in enumerate(scraper.get_items()):
+        scraper = sntwitter.TwitterUserScraper(TARGET)
 
-        if i > 300:
-            break
+        for i, user in enumerate(scraper.get_items()):
 
-        users.append({
-            "username": user.username,
-            "name": user.displayname,
-            "icon": user.profileImageUrl
-        })
+            if i >= 300:
+                break
+
+            users.append({
+                "username": user.username,
+                "name": user.displayname,
+                "icon": user.profileImageUrl
+            })
+
+    except Exception as e:
+
+        print("ERROR getting following:", e)
 
     return users
 
@@ -54,25 +60,54 @@ def send_embed(user, mode):
         }
     }
 
-    requests.post(WEBHOOK, json={"embeds": [embed]})
+    try:
+        requests.post(WEBHOOK, json={"embeds":[embed]})
+    except Exception as e:
+        print("Discord error:", e)
+
+
+def load_state():
+
+    if os.path.exists(STATE_FILE):
+
+        try:
+            with open(STATE_FILE) as f:
+                return json.load(f)
+        except:
+            return None
+
+    return None
+
+
+def save_state(data):
+
+    try:
+        with open(STATE_FILE,"w") as f:
+            json.dump(data,f)
+    except Exception as e:
+        print("Save error:", e)
 
 
 def main():
 
+    print("Checking follow changes...")
+
     following = get_following()
+
+    if not following:
+        print("No data fetched.")
+        return
 
     usernames = [u["username"] for u in following]
 
-    if os.path.exists(STATE_FILE):
-        with open(STATE_FILE) as f:
-            old = json.load(f)
-    else:
-        old = None
+    old = load_state()
 
     if old is None:
 
+        print("First run: sending last 10 follows")
+
         for user in following[:10]:
-            send_embed(user, "first")
+            send_embed(user,"first")
 
     else:
 
@@ -80,18 +115,21 @@ def main():
         removed = [u for u in old if u not in usernames]
 
         for user in new:
-            send_embed(user, "follow")
+            send_embed(user,"follow")
 
         for user in removed:
-            fake = {
-                "username": user,
-                "name": user,
-                "icon": f"https://unavatar.io/twitter/{user}"
-            }
-            send_embed(fake, "unfollow")
 
-    with open(STATE_FILE, "w") as f:
-        json.dump(usernames, f)
+            fake = {
+                "username":user,
+                "name":user,
+                "icon":f"https://unavatar.io/twitter/{user}"
+            }
+
+            send_embed(fake,"unfollow")
+
+    save_state(usernames)
+
+    print("Done")
 
 
 if __name__ == "__main__":
