@@ -22,57 +22,69 @@ def send_embed(user,title,color):
 
 def get_user_id():
 
+    url = f"https://cdn.syndication.twimg.com/widgets/followbutton/info.json?screen_names={TARGET}"
+
     try:
 
-        url=f"https://cdn.syndication.twimg.com/widgets/followbutton/info.json?screen_names={TARGET}"
+        r = requests.get(url, timeout=10)
 
-        r=requests.get(url,timeout=10)
+        if r.status_code != 200:
+            print("ユーザーID取得失敗")
+            return None
 
-        data=r.json()
+        data = r.json()
+
+        if not data:
+            print("ユーザーID取得失敗")
+            return None
 
         return data[0]["id_str"]
 
-    except:
+    except Exception as e:
 
-        print("ユーザーID取得失敗")
-
+        print("ユーザーID取得エラー:", e)
         return None
 
 
 def get_following():
 
-    user_id=get_user_id()
+    user_id = get_user_id()
 
     if not user_id:
         return []
 
-    api=f"https://api.twitter.com/1.1/friends/list.json?user_id={user_id}&count=200"
+    api = f"https://api.twitter.com/1.1/friends/list.json?user_id={user_id}&count=200"
 
-    headers={
-        "authorization":"Bearer AAAAAAAAAAAAAAAAAAAAANRILgAAAAAA",
-        "user-agent":"Mozilla/5.0"
+    headers = {
+        "authorization": "Bearer AAAAAAAAAAAAAAAAAAAAANRILgAAAAAA",
+        "user-agent": "Mozilla/5.0"
     }
 
     try:
 
-        data=requests.get(api,headers=headers,timeout=10).json()
+        r = requests.get(api, headers=headers, timeout=10)
 
-    except:
+        if r.status_code != 200:
+            print("フォロー取得失敗")
+            return []
 
-        print("フォロー取得失敗")
+        data = r.json()
+
+    except Exception as e:
+
+        print("フォロー取得エラー:", e)
         return []
 
-    users=[]
+    users = []
 
-    for u in data.get("users",[]):
-
+    for u in data.get("users", []):
         users.append({
-            "username":u["screen_name"],
-            "name":u["name"],
-            "icon":u["profile_image_url_https"].replace("_normal","")
+            "username": u["screen_name"],
+            "name": u["name"],
+            "icon": u["profile_image_url_https"].replace("_normal","")
         })
 
-    print("取得フォロー数:",len(users))
+    print("取得フォロー数:", len(users))
 
     return users
 
