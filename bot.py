@@ -1,132 +1,60 @@
-import os
-os.system("playwright install chromium")
-
-import asyncio
-import json
 import requests
-from playwright.async_api import async_playwright
+import json
+import os
 
 TARGET = "shizenboueigun"
-
 WEBHOOK = os.getenv("DISCORD_WEBHOOK")
-X_USER = os.getenv("X_USER")
-X_PASS = os.getenv("X_PASS")
 
 STATE_FILE = "following.json"
-COOKIE_FILE = "cookies.json"
 
 
-def send_embed(title,user,color):
+def send_embed(user, title, color):
 
-    embed={
-        "title":title,
-        "description":f"[{user['name']} (@{user['username']})](https://x.com/{user['username']})",
-        "color":color,
-        "thumbnail":{"url":user["icon"]}
+    embed = {
+        "title": title,
+        "description": f"[{user['name']} (@{user['username']})](https://x.com/{user['username']})",
+        "color": color,
+        "thumbnail": {"url": user["icon"]}
     }
 
-    requests.post(WEBHOOK,json={"embeds":[embed]})
+    requests.post(WEBHOOK, json={"embeds": [embed]})
 
 
-async def login(page):
+def get_user_id():
 
-    print("ログイン実行")
+    url = f"https://cdn.syndication.twimg.com/widgets/followbutton/info.json?screen_names={TARGET}"
 
-    await page.goto("https://x.com/i/flow/login")
+    data = requests.get(url).json()
 
-    await page.fill('input[name="text"]',X_USER)
-    await page.keyboard.press("Enter")
-
-    await page.wait_for_timeout(2000)
-
-    await page.fill('input[name="password"]',X_PASS)
-    await page.keyboard.press("Enter")
-
-    await page.wait_for_timeout(5000)
+    return data[0]["id_str"]
 
 
-async def get_following():
+def get_following():
 
-    users=[]
+    user_id = get_user_id()
 
-    async with async_playwright() as p:
+    api = f"https://api.twitter.com/1.1/friends/list.json?user_id={user_id}&count=200"
 
-        browser=await p.chromium.launch(
-            headless=True,
-            args=["--no-sandbox","--disable-dev-shm-usage"]
-        )
+    headers = {
+        "authorization": "Bearer AAAAAAAAAAAAAAAAAAAAANRILgAAAAAA",
+        "user-agent": "Mozilla/5.0"
+    }
 
-        context=await browser.new_context()
-        page=await context.new_page()
+    data = requests.get(api, headers=headers).json()
 
-        # cookie読み込み
-        if os.path.exists(COOKIE_FILE):
+    users = []
 
-            cookies=json.load(open(COOKIE_FILE))
-            await context.add_cookies(cookies)
+    for u in data.get("users", []):
 
-        await page.goto(f"https://x.com/{TARGET}/following")
+        users.append({
+            "username": u["screen_name"],
+            "name": u["name"],
+            "icon": u["profile_image_url_https"].replace("_normal", "")
+        })
 
-        await page.wait_for_timeout(4000)
+    print("取得フォロー数:", len(users))
 
-        # 未ログインチェック
-        if "login" in page.url:
-
-            print("cookie期限切れ → 再ログイン")
-
-            await login(page)
-
-            cookies=await context.cookies()
-            json.dump(cookies,open(COOKIE_FILE,"w"))
-
-            await page.goto(f"https://x.com/{TARGET}/following")
-            await page.wait_for_timeout(4000)
-
-        # スクロール
-        for _ in range(80):
-
-            await page.mouse.wheel(0,4000)
-            await page.wait_for_timeout(800)
-
-        cells=await page.query_selector_all('[data-testid="UserCell"]')
-
-        for cell in cells:
-
-            try:
-
-                link=await cell.query_selector("a[href^='/']")
-                href=await link.get_attribute("href")
-                username=href.replace("/","")
-
-                name_el=await cell.query_selector("div[dir='ltr'] span")
-                name=await name_el.inner_text()
-
-                icon_el=await cell.query_selector("img")
-                icon=await icon_el.get_attribute("src")
-
-                users.append({
-                    "username":username,
-                    "name":name,
-                    "icon":icon
-                })
-
-            except:
-                pass
-
-        await browser.close()
-
-    # 重複削除
-    seen=set()
-    result=[]
-
-    for u in users:
-
-        if u["username"] not in seen:
-
-            seen.add(u["username"])
-            result.append(u)
-
-    return result
+    return users
 
 
 def load_state():
@@ -139,47 +67,46 @@ def load_state():
 
 def save_state(data):
 
-    json.dump(data,open(STATE_FILE,"w"))
+    json.dump(data, open(STATE_FILE, "w"))
 
 
-async def main():
+def main():
 
-    following=await get_following()
+    following = get_following()
 
-    print("取得フォロー数:",len(following))
+    usernames = [u["username"] for u in following]
 
-    if len(following)==0:
-        print("フォロー取得失敗")
-        return
+    old = load_state()
 
-    usernames=[u["username"] for u in following]
+    # 最新10フォロー
+    print("最新フォロー送信")
 
-    old=load_state()
-
-    # 🔹最新10フォロー通知
     for user in following[:10]:
-        send_embed("👀 最近のフォロー",user,3447003)
 
-    # 🔹新フォロー
-    new=[u for u in following if u["username"] not in old]
+        send_embed(user, "👀 最近のフォロー", 3447003)
+
+    # 新フォロー
+    new = [u for u in following if u["username"] not in old]
 
     for user in new:
-        send_embed("🆕 新しくフォローしました",user,3066993)
 
-    # 🔹フォロー解除
-    removed=[u for u in old if u not in usernames]
+        send_embed(user, "🆕 新しくフォローしました", 3066993)
+
+    # フォロー解除
+    removed = [u for u in old if u not in usernames]
 
     for user in removed:
 
-        fake={
-            "username":user,
-            "name":user,
-            "icon":f"https://unavatar.io/twitter/{user}"
+        fake = {
+            "username": user,
+            "name": user,
+            "icon": f"https://unavatar.io/twitter/{user}"
         }
 
-        send_embed("❌ フォロー解除しました",fake,15158332)
+        send_embed(fake, "❌ フォロー解除しました", 15158332)
 
     save_state(usernames)
 
 
-asyncio.run(main())
+if __name__ == "__main__":
+    main()
