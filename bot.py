@@ -15,7 +15,6 @@ X_PASS = os.getenv("X_PASS")
 STATE_FILE = "following.json"
 COOKIE_FILE = "cookies.json"
 
-
 def send_embed(title,user,color):
 
     embed = {
