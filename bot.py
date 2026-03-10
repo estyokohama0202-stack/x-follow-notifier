@@ -1,6 +1,8 @@
+import os
+os.system("playwright install chromium")
+
 import asyncio
 import json
-import os
 import requests
 from playwright.async_api import async_playwright
 
