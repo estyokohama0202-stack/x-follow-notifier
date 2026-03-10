@@ -1,6 +1,7 @@
 import requests
 import json
 import os
+import time
 import snscrape.modules.twitter as sntwitter
 
 TARGET = "shizenboueigun"
@@ -18,7 +19,7 @@ def get_following():
 
         for i, user in enumerate(scraper.get_items()):
 
-            if i >= 300:
+            if i >= 200:
                 break
 
             users.append({
@@ -29,24 +30,12 @@ def get_following():
 
     except Exception as e:
 
-        print("ERROR getting following:", e)
+        print("Fetch error:", e)
 
     return users
 
 
-def send_embed(user, mode):
-
-    if mode == "follow":
-        title = "🆕 新しくフォローしました"
-        color = 3066993
-
-    elif mode == "unfollow":
-        title = "❌ フォロー解除しました"
-        color = 15158332
-
-    else:
-        title = "👀 最近のフォロー"
-        color = 3447003
+def send_embed(title, user, color):
 
     embed = {
         "title": title,
@@ -61,7 +50,7 @@ def send_embed(user, mode):
     }
 
     try:
-        requests.post(WEBHOOK, json={"embeds":[embed]})
+        requests.post(WEBHOOK, json={"embeds": [embed]})
     except Exception as e:
         print("Discord error:", e)
 
@@ -90,12 +79,12 @@ def save_state(data):
 
 def main():
 
-    print("Checking follow changes...")
+    print("Checking follows...")
 
     following = get_following()
 
     if not following:
-        print("No data fetched.")
+        print("Failed to fetch data")
         return
 
     usernames = [u["username"] for u in following]
@@ -104,10 +93,12 @@ def main():
 
     if old is None:
 
-        print("First run: sending last 10 follows")
+        print("First run")
 
         for user in following[:10]:
-            send_embed(user,"first")
+            send_embed("👀 最近のフォロー", user, 3447003)
+
+            time.sleep(1)
 
     else:
 
@@ -115,7 +106,10 @@ def main():
         removed = [u for u in old if u not in usernames]
 
         for user in new:
-            send_embed(user,"follow")
+
+            send_embed("🆕 新しくフォローしました", user, 3066993)
+
+            time.sleep(1)
 
         for user in removed:
 
@@ -125,7 +119,9 @@ def main():
                 "icon":f"https://unavatar.io/twitter/{user}"
             }
 
-            send_embed(fake,"unfollow")
+            send_embed("❌ フォロー解除しました", fake, 15158332)
+
+            time.sleep(1)
 
     save_state(usernames)
 
