@@ -22,18 +22,15 @@ def send_embed(title,user,color):
         "title":title,
         "description":f"[{user['name']} (@{user['username']})](https://x.com/{user['username']})",
         "color":color,
-        "thumbnail":{"url":user["icon"]},
-        "author":{
-            "name":user["name"],
-            "icon_url":user["icon"],
-            "url":f"https://x.com/{user['username']}"
-        }
+        "thumbnail":{"url":user["icon"]}
     }
 
     requests.post(WEBHOOK,json={"embeds":[embed]})
 
 
 async def login(page):
+
+    print("ログイン実行")
 
     await page.goto("https://x.com/login")
 
@@ -62,22 +59,30 @@ async def get_following():
         context=await browser.new_context()
         page=await context.new_page()
 
+        # cookie読み込み
         if os.path.exists(COOKIE_FILE):
 
             cookies=json.load(open(COOKIE_FILE))
             await context.add_cookies(cookies)
 
-        else:
+        await page.goto(f"https://x.com/{TARGET}/following")
+
+        await page.wait_for_timeout(4000)
+
+        # 未ログインチェック
+        if "login" in page.url:
+
+            print("cookie期限切れ → 再ログイン")
 
             await login(page)
+
             cookies=await context.cookies()
             json.dump(cookies,open(COOKIE_FILE,"w"))
 
-        await page.goto(f"https://x.com/{TARGET}/following")
+            await page.goto(f"https://x.com/{TARGET}/following")
+            await page.wait_for_timeout(4000)
 
-        await page.wait_for_timeout(5000)
-
-        # フォロー読み込み
+        # スクロール
         for _ in range(80):
 
             await page.mouse.wheel(0,4000)
@@ -144,19 +149,18 @@ async def main():
     print("取得フォロー数:",len(following))
 
     if len(following)==0:
+        print("フォロー取得失敗")
         return
 
     usernames=[u["username"] for u in following]
 
     old=load_state()
 
-    # 🔹必ず最新10フォロー送信
-    latest=following[:10]
-
-    for user in latest:
+    # 🔹最新10フォロー通知
+    for user in following[:10]:
         send_embed("👀 最近のフォロー",user,3447003)
 
-    # 🔹新規フォロー
+    # 🔹新フォロー
     new=[u for u in following if u["username"] not in old]
 
     for user in new:
