@@ -1,6 +1,8 @@
-import requests
-import json
 import os
+import json
+import asyncio
+import requests
+from playwright.async_api import async_playwright
 
 TARGET = "shizenboueigun"
 WEBHOOK = os.getenv("DISCORD_WEBHOOK")
@@ -8,91 +10,69 @@ WEBHOOK = os.getenv("DISCORD_WEBHOOK")
 STATE_FILE = "following.json"
 
 
-def send_embed(user,title,color):
-
-    embed={
-        "title":title,
-        "description":f"[{user['name']} (@{user['username']})](https://x.com/{user['username']})",
-        "color":color,
-        "thumbnail":{"url":user["icon"]}
-    }
-
-    requests.post(WEBHOOK,json={"embeds":[embed]})
-
-
-def get_user_id():
-
-    url = f"https://cdn.syndication.twimg.com/widgets/followbutton/info.json?screen_names={TARGET}"
-
-    try:
-
-        r = requests.get(url, timeout=10)
-
-        if r.status_code != 200:
-            print("ユーザーID取得失敗")
-            return None
-
-        data = r.json()
-
-        if not data:
-            print("ユーザーID取得失敗")
-            return None
-
-        return data[0]["id_str"]
-
-    except Exception as e:
-
-        print("ユーザーID取得エラー:", e)
-        return None
-
-
-def get_following():
-
-    user_id = get_user_id()
-
-    if not user_id:
-        return []
-
-    api = f"https://api.twitter.com/1.1/friends/list.json?user_id={user_id}&count=200"
-
-    headers = {
-        "authorization": "Bearer AAAAAAAAAAAAAAAAAAAAANRILgAAAAAA",
-        "user-agent": "Mozilla/5.0"
-    }
-
-    try:
-
-        r = requests.get(api, headers=headers, timeout=10)
-
-        if r.status_code != 200:
-            print("フォロー取得失敗")
-            return []
-
-        data = r.json()
-
-    except Exception as e:
-
-        print("フォロー取得エラー:", e)
-        return []
+async def get_following():
 
     users = []
 
-    for u in data.get("users", []):
-        users.append({
-            "username": u["screen_name"],
-            "name": u["name"],
-            "icon": u["profile_image_url_https"].replace("_normal","")
-        })
+    async with async_playwright() as p:
+
+        browser = await p.chromium.launch(headless=True)
+        page = await browser.new_page()
+
+        url = f"https://x.com/{TARGET}/following"
+
+        await page.goto(url)
+
+        await page.wait_for_timeout(5000)
+
+        cards = await page.query_selector_all("div[data-testid='UserCell']")
+
+        for card in cards[:20]:
+
+            name_el = await card.query_selector("div[dir='ltr'] span")
+            username_el = await card.query_selector("a")
+
+            if name_el and username_el:
+
+                name = await name_el.inner_text()
+                href = await username_el.get_attribute("href")
+
+                username = href.replace("/", "")
+
+                icon_el = await card.query_selector("img")
+
+                icon = ""
+                if icon_el:
+                    icon = await icon_el.get_attribute("src")
+
+                users.append({
+                    "name": name,
+                    "username": username,
+                    "icon": icon
+                })
+
+        await browser.close()
 
     print("取得フォロー数:", len(users))
 
     return users
 
 
+def send_embed(user, title, color):
+
+    embed = {
+        "title": title,
+        "description": f"[{user['name']} (@{user['username']})](https://x.com/{user['username']})",
+        "color": color,
+        "thumbnail": {"url": user["icon"]}
+    }
+
+    requests.post(WEBHOOK, json={"embeds": [embed]})
+
+
 def load_state():
 
     if os.path.exists(STATE_FILE):
-
         return json.load(open(STATE_FILE))
 
     return []
@@ -100,49 +80,42 @@ def load_state():
 
 def save_state(data):
 
-    json.dump(data,open(STATE_FILE,"w"))
+    json.dump(data, open(STATE_FILE, "w"))
 
 
-def main():
+async def main():
 
-    following=get_following()
+    following = await get_following()
 
-    if not following:
+    usernames = [u["username"] for u in following]
 
-        print("フォロー取得失敗")
-        return
-
-    usernames=[u["username"] for u in following]
-
-    old=load_state()
+    old = load_state()
 
     print("最新フォロー送信")
 
     for user in following[:10]:
 
-        send_embed(user,"🆕 最近のフォロー",3447003)
+        send_embed(user, "🆕 最近のフォロー", 3447003)
 
-    new=[u for u in following if u["username"] not in old]
+    new = [u for u in following if u["username"] not in old]
 
     for user in new:
 
-        send_embed(user,"🆕 新しくフォローしました",3066993)
+        send_embed(user, "🆕 新しくフォローしました", 3066993)
 
-    removed=[u for u in old if u not in usernames]
+    removed = [u for u in old if u not in usernames]
 
     for user in removed:
 
-        fake={
-            "username":user,
-            "name":user,
-            "icon":f"https://unavatar.io/twitter/{user}"
+        fake = {
+            "username": user,
+            "name": user,
+            "icon": f"https://unavatar.io/twitter/{user}"
         }
 
-        send_embed(fake,"❌ フォロー解除しました",15158332)
+        send_embed(fake, "❌ フォロー解除しました", 15158332)
 
     save_state(usernames)
 
 
-if __name__=="__main__":
-
-    main()
+asyncio.run(main())
