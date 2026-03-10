@@ -35,11 +35,11 @@ def send_embed(user, mode):
         color = 3066993
 
     elif mode == "unfollow":
-        title = "フォロー解除しました"
+        title = "❌ フォロー解除しました"
         color = 15158332
 
     else:
-        title = "最近のフォロー"
+        title = "👀 最近のフォロー"
         color = 3447003
 
     embed = {
@@ -54,7 +54,7 @@ def send_embed(user, mode):
         }
     }
 
-    requests.post(WEBHOOK, json={"embeds":[embed]})
+    requests.post(WEBHOOK, json={"embeds": [embed]})
 
 
 def main():
@@ -63,16 +63,16 @@ def main():
 
     usernames = [u["username"] for u in following]
 
-    try:
+    if os.path.exists(STATE_FILE):
         with open(STATE_FILE) as f:
             old = json.load(f)
-    except:
+    else:
         old = None
 
     if old is None:
 
         for user in following[:10]:
-            send_embed(user,"first")
+            send_embed(user, "first")
 
     else:
 
@@ -80,18 +80,18 @@ def main():
         removed = [u for u in old if u not in usernames]
 
         for user in new:
-            send_embed(user,"follow")
+            send_embed(user, "follow")
 
         for user in removed:
             fake = {
-                "username":user,
-                "name":user,
-                "icon":f"https://unavatar.io/twitter/{user}"
+                "username": user,
+                "name": user,
+                "icon": f"https://unavatar.io/twitter/{user}"
             }
-            send_embed(fake,"unfollow")
+            send_embed(fake, "unfollow")
 
-    with open(STATE_FILE,"w") as f:
-        json.dump(usernames,f)
+    with open(STATE_FILE, "w") as f:
+        json.dump(usernames, f)
 
 
 if __name__ == "__main__":
