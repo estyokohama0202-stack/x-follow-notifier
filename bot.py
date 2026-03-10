@@ -1,8 +1,6 @@
-import os
-os.system("playwright install chromium")
-
 import asyncio
 import json
+import os
 import requests
 from playwright.async_api import async_playwright
 
@@ -14,6 +12,26 @@ X_PASS = os.getenv("X_PASS")
 
 STATE_FILE = "following.json"
 COOKIE_FILE = "cookies.json"
+
+
+def send_embed(title,user,color):
+
+    icon = f"https://unavatar.io/twitter/{user}"
+
+    embed = {
+        "title": title,
+        "description": f"[@{user}](https://x.com/{user})",
+        "color": color,
+        "thumbnail": {"url": icon},
+        "author": {
+            "name": user,
+            "url": f"https://x.com/{user}",
+            "icon_url": icon
+        },
+        "footer": {"text": "X Follow Monitor"}
+    }
+
+    requests.post(DISCORD_WEBHOOK,json={"embeds":[embed]})
 
 
 async def login(page):
@@ -87,34 +105,6 @@ async def get_following():
         await browser.close()
 
     return list(set(users))
-    
-def get_icon(username):
-
-    return f"https://unavatar.io/twitter/{username}"
-
-
-def send_embed(title, user, color):
-
-    icon = f"https://unavatar.io/twitter/{user}"
-
-    embed = {
-        "title": title,
-        "description": f"[@{user}](https://x.com/{user})",
-        "color": color,
-        "thumbnail": {
-            "url": icon
-        },
-        "author": {
-            "name": user,
-            "url": f"https://x.com/{user}",
-            "icon_url": icon
-        },
-        "footer": {
-            "text": "X Follow Monitor"
-        }
-    }
-
-    requests.post(DISCORD_WEBHOOK, json={"embeds":[embed]})
 
 
 def load_state():
@@ -135,7 +125,7 @@ async def main():
 
     following = await get_following()
 
-    # 毎回最新10件送信
+    # 毎回最新10フォロー送信
     for user in following[:10]:
         send_embed("👀 最近のフォロー", user, 3447003)
 
