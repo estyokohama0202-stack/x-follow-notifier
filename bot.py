@@ -12,9 +12,7 @@ def get_following():
 
     url = f"https://x.com/{TARGET}/following"
 
-    headers = {
-        "User-Agent": "Mozilla/5.0"
-    }
+    headers = {"User-Agent": "Mozilla/5.0"}
 
     r = requests.get(url, headers=headers)
 
@@ -25,7 +23,6 @@ def get_following():
     result = []
 
     for u in users:
-
         result.append({
             "username": u,
             "name": u,
@@ -41,9 +38,7 @@ def send_embed(title, user, color):
         "title": title,
         "description": f"[{user['name']} (@{user['username']})](https://x.com/{user['username']})",
         "color": color,
-        "thumbnail": {
-            "url": user["icon"]
-        }
+        "thumbnail": {"url": user["icon"]}
     }
 
     requests.post(WEBHOOK, json={"embeds":[embed]})
@@ -52,7 +47,6 @@ def send_embed(title, user, color):
 def load_state():
 
     if os.path.exists(STATE_FILE):
-
         with open(STATE_FILE) as f:
             return json.load(f)
 
