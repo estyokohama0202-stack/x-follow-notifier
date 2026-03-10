@@ -32,7 +32,7 @@ async def login(page):
 
     print("ログイン実行")
 
-    await page.goto("https://x.com/login")
+    await page.goto("https://x.com/i/flow/login")
 
     await page.fill('input[name="text"]',X_USER)
     await page.keyboard.press("Enter")
