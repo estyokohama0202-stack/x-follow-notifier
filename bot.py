@@ -77,7 +77,7 @@ async def get_following():
 
         await page.wait_for_timeout(4000)
 
-        for i in range(15):
+        for i in range(40):
 
             await page.mouse.wheel(0,3000)
             await page.wait_for_timeout(1000)
