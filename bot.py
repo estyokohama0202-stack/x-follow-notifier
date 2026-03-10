@@ -86,21 +86,28 @@ def get_icon(username):
     return f"https://unavatar.io/twitter/{username}"
 
 
-def send_embed(title,user,color):
+def send_embed(title, user, color):
+
+    icon = f"https://unavatar.io/twitter/{user}"
 
     embed = {
         "title": title,
-        "description": f"https://x.com/{user}",
+        "description": f"[@{user}](https://x.com/{user})",
         "color": color,
         "thumbnail": {
-            "url": get_icon(user)
+            "url": icon
+        },
+        "author": {
+            "name": user,
+            "url": f"https://x.com/{user}",
+            "icon_url": icon
         },
         "footer": {
             "text": "X Follow Monitor"
         }
     }
 
-    requests.post(DISCORD_WEBHOOK,json={"embeds":[embed]})
+    requests.post(DISCORD_WEBHOOK, json={"embeds":[embed]})
 
 
 def load_state():
