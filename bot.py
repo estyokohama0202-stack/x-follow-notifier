@@ -6,7 +6,7 @@ from playwright.async_api import async_playwright
 
 TARGET = "shizenboueigun"
 
-DISCORD_WEBHOOK = os.getenv("DISCORD_WEBHOOK")
+WEBHOOK = os.getenv("DISCORD_WEBHOOK")
 X_USER = os.getenv("X_USER")
 X_PASS = os.getenv("X_PASS")
 
@@ -14,7 +14,7 @@ STATE_FILE = "following.json"
 COOKIE_FILE = "cookies.json"
 
 
-def send_embed(title,user,color):
+def send_embed(title, user, color):
 
     icon = f"https://unavatar.io/twitter/{user}"
 
@@ -25,13 +25,12 @@ def send_embed(title,user,color):
         "thumbnail": {"url": icon},
         "author": {
             "name": user,
-            "url": f"https://x.com/{user}",
-            "icon_url": icon
-        },
-        "footer": {"text": "X Follow Monitor"}
+            "icon_url": icon,
+            "url": f"https://x.com/{user}"
+        }
     }
 
-    requests.post(DISCORD_WEBHOOK,json={"embeds":[embed]})
+    requests.post(WEBHOOK, json={"embeds":[embed]})
 
 
 async def login(page):
@@ -77,15 +76,15 @@ async def get_following():
 
         await page.goto(f"https://x.com/{TARGET}/following")
 
-        await page.wait_for_timeout(5000)
+        await page.wait_for_timeout(4000)
 
         # スクロール
-        for i in range(20):
+        for i in range(15):
 
-            await page.mouse.wheel(0,4000)
-            await page.wait_for_timeout(1200)
+            await page.mouse.wheel(0,3000)
+            await page.wait_for_timeout(1000)
 
-        cells = await page.query_selector_all('div[data-testid="UserCell"]')
+        cells = await page.query_selector_all('[data-testid="UserCell"]')
 
         for cell in cells:
 
@@ -95,7 +94,6 @@ async def get_following():
                 continue
 
             href = await link.get_attribute("href")
-
             username = href.replace("/","")
 
             if username != TARGET:
@@ -104,7 +102,7 @@ async def get_following():
 
         await browser.close()
 
-    return list(set(users))
+    return list(dict.fromkeys(users))
 
 
 def load_state():
@@ -118,14 +116,14 @@ def load_state():
 
 def save_state(data):
 
-    json.dump(data,open(STATE_FILE,"w"))
+    json.dump(data, open(STATE_FILE,"w"))
 
 
 async def main():
 
     following = await get_following()
 
-    # 毎回最新10フォロー送信
+    # 接続時毎回最新10フォロー
     for user in following[:10]:
         send_embed("👀 最近のフォロー", user, 3447003)
 
