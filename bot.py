@@ -39,7 +39,7 @@ async def get_following():
 
         browser = await p.chromium.launch(
             headless=True,
-            args=["--no-sandbox", "--disable-dev-shm-usage"]
+            args=["--no-sandbox","--disable-dev-shm-usage"]
         )
 
         context = await browser.new_context()
@@ -55,43 +55,38 @@ async def get_following():
 
             await login(page)
             cookies = await context.cookies()
-            json.dump(cookies, open(COOKIE_FILE, "w"))
+            json.dump(cookies, open(COOKIE_FILE,"w"))
 
         await page.goto(f"https://x.com/{TARGET}/following")
 
         await page.wait_for_timeout(5000)
 
-        # スクロールして読み込み
-        for i in range(15):
+        # スクロール
+        for i in range(20):
 
-            await page.mouse.wheel(0, 3000)
-            await page.wait_for_timeout(1500)
+            await page.mouse.wheel(0,4000)
+            await page.wait_for_timeout(1200)
 
-        links = await page.query_selector_all("a[href^='/']")
+        cells = await page.query_selector_all('div[data-testid="UserCell"]')
 
-        for link in links:
+        for cell in cells:
+
+            link = await cell.query_selector("a[href^='/']")
+
+            if not link:
+                continue
 
             href = await link.get_attribute("href")
 
-            if not href:
-                continue
+            username = href.replace("/","")
 
-            if href.count("/") != 1:
-                continue
+            if username != TARGET:
 
-            username = href.replace("/", "")
-
-            if username in ["home","explore","notifications","messages","login"]:
-                continue
-
-            if username == TARGET:
-                continue
-
-            users.append(username)
+                users.append(username)
 
         await browser.close()
 
-    return list(set(users))[:300]
+    return list(set(users))
     
 def get_icon(username):
 
