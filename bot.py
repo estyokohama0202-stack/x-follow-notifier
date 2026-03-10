@@ -18,11 +18,11 @@ COOKIE_FILE = "cookies.json"
 
 def send_embed(title,user,color):
 
-    embed = {
-        "title": title,
-        "description": f"[{user['name']} (@{user['username']})](https://x.com/{user['username']})",
-        "color": color,
-        "thumbnail": {"url": user["icon"]},
+    embed={
+        "title":title,
+        "description":f"[{user['name']} (@{user['username']})](https://x.com/{user['username']})",
+        "color":color,
+        "thumbnail":{"url":user["icon"]},
         "author":{
             "name":user["name"],
             "icon_url":user["icon"],
@@ -77,12 +77,11 @@ async def get_following():
 
         await page.wait_for_timeout(5000)
 
-        last_height=0
-
-        for _ in range(40):
+        # フォロー読み込み
+        for _ in range(80):
 
             await page.mouse.wheel(0,4000)
-            await page.wait_for_timeout(1200)
+            await page.wait_for_timeout(800)
 
         cells=await page.query_selector_all('[data-testid="UserCell"]')
 
@@ -116,7 +115,9 @@ async def get_following():
     result=[]
 
     for u in users:
+
         if u["username"] not in seen:
+
             seen.add(u["username"])
             result.append(u)
 
@@ -140,12 +141,19 @@ async def main():
 
     following=await get_following()
 
+    print("取得フォロー数:",len(following))
+
+    if len(following)==0:
+        return
+
     usernames=[u["username"] for u in following]
 
     old=load_state()
 
-    # 🔹毎回最新10フォロー
-    for user in following[:10]:
+    # 🔹必ず最新10フォロー送信
+    latest=following[:10]
+
+    for user in latest:
         send_embed("👀 最近のフォロー",user,3447003)
 
     # 🔹新規フォロー
