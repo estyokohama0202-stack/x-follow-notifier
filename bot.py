@@ -31,15 +31,15 @@ def get_following():
 def send_embed(user, mode):
 
     if mode == "follow":
-        title = "🆕 新しいフォロー"
+        title = "🆕 新しくフォローしました"
         color = 3066993
 
     elif mode == "unfollow":
-        title = "❌ フォロー解除"
+        title = "フォロー解除しました"
         color = 15158332
 
     else:
-        title = "👀 最近フォロー"
+        title = "最近のフォロー"
         color = 3447003
 
     embed = {
