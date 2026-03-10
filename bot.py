@@ -15,6 +15,7 @@ X_PASS = os.getenv("X_PASS")
 STATE_FILE = "following.json"
 COOKIE_FILE = "cookies.json"
 
+
 def send_embed(title,user,color):
 
     embed = {
@@ -26,8 +27,7 @@ def send_embed(title,user,color):
             "name":user["name"],
             "icon_url":user["icon"],
             "url":f"https://x.com/{user['username']}"
-        },
-        "footer":{"text":"X Follow Monitor"}
+        }
     }
 
     requests.post(WEBHOOK,json={"embeds":[embed]})
@@ -75,12 +75,14 @@ async def get_following():
 
         await page.goto(f"https://x.com/{TARGET}/following")
 
-        await page.wait_for_timeout(4000)
+        await page.wait_for_timeout(5000)
 
-        for i in range(40):
+        last_height=0
 
-            await page.mouse.wheel(0,3000)
-            await page.wait_for_timeout(1000)
+        for _ in range(40):
+
+            await page.mouse.wheel(0,4000)
+            await page.wait_for_timeout(1200)
 
         cells=await page.query_selector_all('[data-testid="UserCell"]')
 
@@ -88,10 +90,11 @@ async def get_following():
 
             try:
 
-                username_el=await cell.query_selector('a[href^="/"]')
-                username=(await username_el.get_attribute("href")).replace("/","")
+                link=await cell.query_selector("a[href^='/']")
+                href=await link.get_attribute("href")
+                username=href.replace("/","")
 
-                name_el=await cell.query_selector('div[dir="ltr"] span')
+                name_el=await cell.query_selector("div[dir='ltr'] span")
                 name=await name_el.inner_text()
 
                 icon_el=await cell.query_selector("img")
@@ -108,7 +111,16 @@ async def get_following():
 
         await browser.close()
 
-    return users
+    # 重複削除
+    seen=set()
+    result=[]
+
+    for u in users:
+        if u["username"] not in seen:
+            seen.add(u["username"])
+            result.append(u)
+
+    return result
 
 
 def load_state():
@@ -116,7 +128,7 @@ def load_state():
     if os.path.exists(STATE_FILE):
         return json.load(open(STATE_FILE))
 
-    return None
+    return []
 
 
 def save_state(data):
@@ -132,27 +144,28 @@ async def main():
 
     old=load_state()
 
-    # 接続時最新10フォロー
+    # 🔹毎回最新10フォロー
     for user in following[:10]:
         send_embed("👀 最近のフォロー",user,3447003)
 
-    if old:
+    # 🔹新規フォロー
+    new=[u for u in following if u["username"] not in old]
 
-        new=[u for u in following if u["username"] not in old]
-        removed=[u for u in old if u not in usernames]
+    for user in new:
+        send_embed("🆕 新しくフォローしました",user,3066993)
 
-        for user in new:
-            send_embed("🆕 新しくフォローしました",user,3066993)
+    # 🔹フォロー解除
+    removed=[u for u in old if u not in usernames]
 
-        for user in removed:
+    for user in removed:
 
-            fake={
-                "username":user,
-                "name":user,
-                "icon":f"https://unavatar.io/twitter/{user}"
-            }
+        fake={
+            "username":user,
+            "name":user,
+            "icon":f"https://unavatar.io/twitter/{user}"
+        }
 
-            send_embed("❌ フォロー解除しました",fake,15158332)
+        send_embed("❌ フォロー解除しました",fake,15158332)
 
     save_state(usernames)
 
