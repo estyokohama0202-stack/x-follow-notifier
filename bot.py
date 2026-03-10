@@ -39,13 +39,13 @@ async def get_following():
 
         browser = await p.chromium.launch(
             headless=True,
-            args=["--no-sandbox","--disable-dev-shm-usage"]
+            args=["--no-sandbox", "--disable-dev-shm-usage"]
         )
 
         context = await browser.new_context()
-
         page = await context.new_page()
 
+        # cookie login
         if os.path.exists(COOKIE_FILE):
 
             cookies = json.load(open(COOKIE_FILE))
@@ -54,13 +54,18 @@ async def get_following():
         else:
 
             await login(page)
-
             cookies = await context.cookies()
-            json.dump(cookies, open(COOKIE_FILE,"w"))
+            json.dump(cookies, open(COOKIE_FILE, "w"))
 
         await page.goto(f"https://x.com/{TARGET}/following")
 
-        await page.wait_for_timeout(6000)
+        await page.wait_for_timeout(5000)
+
+        # スクロールして読み込み
+        for i in range(15):
+
+            await page.mouse.wheel(0, 3000)
+            await page.wait_for_timeout(1500)
 
         links = await page.query_selector_all("a[href^='/']")
 
@@ -68,19 +73,26 @@ async def get_following():
 
             href = await link.get_attribute("href")
 
-            if href and href.count("/") == 1:
+            if not href:
+                continue
 
-                user = href.replace("/","")
+            if href.count("/") != 1:
+                continue
 
-                if user != TARGET:
+            username = href.replace("/", "")
 
-                    users.append(user)
+            if username in ["home","explore","notifications","messages","login"]:
+                continue
+
+            if username == TARGET:
+                continue
+
+            users.append(username)
 
         await browser.close()
 
-    return list(set(users))
-
-
+    return list(set(users))[:300]
+    
 def get_icon(username):
 
     return f"https://unavatar.io/twitter/{username}"
