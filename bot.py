@@ -10,64 +10,77 @@ WEBHOOK = os.getenv("DISCORD_WEBHOOK")
 
 STATE_FILE = "following.json"
 
-MAX_SCROLL = 10
+MAX_SCROLL = 50
 
 
 async def get_following():
 
-    users = []
-
+    users = {}
+    
     async with async_playwright() as p:
 
-        browser = await p.chromium.launch(headless=True)
+        browser = await p.chromium.launch(
+            headless=True,
+            args=["--no-sandbox", "--disable-dev-shm-usage"]
+        )
+
         page = await browser.new_page()
 
         url = f"https://x.com/{TARGET}/following"
 
         await page.goto(url, timeout=60000)
-
         await page.wait_for_timeout(5000)
+
+        last_height = 0
 
         for _ in range(MAX_SCROLL):
 
-            await page.mouse.wheel(0, 3000)
+            cards = await page.query_selector_all("div[data-testid='UserCell']")
+
+            for card in cards:
+
+                username_el = await card.query_selector("a[href^='/']")
+                name_el = await card.query_selector("div[dir='ltr'] span")
+                icon_el = await card.query_selector("img")
+
+                if not username_el:
+                    continue
+
+                href = await username_el.get_attribute("href")
+                username = href.replace("/", "")
+
+                if username in users:
+                    continue
+
+                name = username
+                if name_el:
+                    name = await name_el.inner_text()
+
+                icon = ""
+                if icon_el:
+                    icon = await icon_el.get_attribute("src")
+
+                users[username] = {
+                    "name": name,
+                    "username": username,
+                    "icon": icon
+                }
+
+            await page.mouse.wheel(0, 4000)
             await page.wait_for_timeout(2000)
 
-        cards = await page.query_selector_all("div[data-testid='UserCell']")
+            height = await page.evaluate("document.body.scrollHeight")
 
-        for card in cards:
+            if height == last_height:
+                break
 
-            name_el = await card.query_selector("div[dir='ltr'] span")
-            username_el = await card.query_selector("a[href^='/']")
-
-            if not username_el:
-                continue
-
-            href = await username_el.get_attribute("href")
-
-            username = href.replace("/", "")
-
-            name = username
-            if name_el:
-                name = await name_el.inner_text()
-
-            icon_el = await card.query_selector("img")
-
-            icon = ""
-            if icon_el:
-                icon = await icon_el.get_attribute("src")
-
-            users.append({
-                "name": name,
-                "username": username,
-                "icon": icon
-            })
+            last_height = height
 
         await browser.close()
 
     print("取得フォロー数:", len(users))
 
-    return users
+    return list(users.values())
 
 
 def send_embed(user, title, color):
