@@ -1,93 +1,59 @@
 import os
 import json
-import asyncio
-import time
 import requests
-from playwright.async_api import async_playwright
+import time
 
 TARGET = "shizenboueigun"
 WEBHOOK = os.getenv("DISCORD_WEBHOOK")
 
 STATE_FILE = "following.json"
 
-MAX_SCROLL = 50
+
+def load_cookies():
+
+    cookies = {}
+
+    with open("cookies.txt") as f:
+
+        for line in f:
+
+            if line.startswith("#"):
+                continue
+
+            parts = line.strip().split("\t")
+
+            if len(parts) >= 7:
+
+                cookies[parts[5]] = parts[6]
+
+    return cookies
 
 
-async def get_following():
+def get_following():
 
-    users = {}
+    cookies = load_cookies()
 
-    async with async_playwright() as p:
+    headers = {
+        "authorization": "Bearer AAAAAAAAAAAAAAAAAAAAANRILgAAAAAA"
+    }
 
-        browser = await p.chromium.launch(
-            headless=True,
-            args=["--no-sandbox", "--disable-dev-shm-usage"]
-        )
+    url = f"https://api.twitter.com/1.1/friends/list.json?screen_name={TARGET}&count=200"
 
-        context = await browser.new_context(
-            storage_state="cookies.json"
-        )
+    r = requests.get(url, headers=headers, cookies=cookies)
 
-        page = await context.new_page()
+    data = r.json()
 
-        url = f"https://x.com/{TARGET}/following"
+    users = []
 
-        await page.goto(url)
+    for u in data["users"]:
 
-        await page.wait_for_timeout(5000)
+        users.append({
+            "name": u["name"],
+            "username": u["screen_name"],
+            "icon": u["profile_image_url_https"]
+        })
 
-        last_height = 0
-
-        for _ in range(MAX_SCROLL):
-
-            cards = await page.query_selector_all("div[data-testid='UserCell']")
-
-            for card in cards:
-
-                username_el = await card.query_selector("a[href^='/']")
-                name_el = await card.query_selector("div[dir='ltr'] span")
-                icon_el = await card.query_selector("img")
-
-                if not username_el:
-                    continue
-
-                href = await username_el.get_attribute("href")
-                username = href.replace("/", "")
-
-                if username in users:
-                    continue
-
-                name = username
-
-                if name_el:
-                    name = await name_el.inner_text()
-
-                icon = ""
-
-                if icon_el:
-                    icon = await icon_el.get_attribute("src")
-
-                users[username] = {
-                    "name": name,
-                    "username": username,
-                    "icon": icon
-                }
-
-            await page.mouse.wheel(0, 4000)
-            await page.wait_for_timeout(2000)
-
-            height = await page.evaluate("document.body.scrollHeight")
-
-            if height == last_height:
-                break
-
-            last_height = height
-
-        await browser.close()
-
-    print("取得フォロー数:", len(users))
-
-    return list(users.values())
+    return users
 
 
 def send_embed(user, title, color):
@@ -99,17 +65,17 @@ def send_embed(user, title, color):
         "thumbnail": {"url": user["icon"]}
     }
 
-    try:
-        requests.post(WEBHOOK, json={"embeds": [embed]})
-        time.sleep(1)
-    except:
-        pass
+    requests.post(WEBHOOK, json={"embeds":[embed]})
+
+    time.sleep(1)
 
 
 def load_state():
 
     if os.path.exists(STATE_FILE):
+
         with open(STATE_FILE) as f:
+
             return json.load(f)
 
     return []
@@ -117,25 +83,28 @@ def load_state():
 
 def save_state(data):
 
-    with open(STATE_FILE, "w") as f:
-        json.dump(data, f)
+    with open(STATE_FILE,"w") as f:
+
+        json.dump(data,f)
 
 
-async def main():
+def main():
 
-    following = await get_following()
+    following = get_following()
 
     usernames = [u["username"] for u in following]
 
     old = load_state()
 
     for user in following[:10]:
-        send_embed(user, "🆕 最近のフォロー", 3447003)
+
+        send_embed(user,"🆕 最近のフォロー",3447003)
 
     new = [u for u in following if u["username"] not in old]
 
     for user in new:
-        send_embed(user, "🆕 新しくフォローしました", 3066993)
+
+        send_embed(user,"🆕 新しくフォローしました",3066993)
 
     removed = [u for u in old if u not in usernames]
 
@@ -147,9 +116,10 @@ async def main():
             "icon": f"https://unavatar.io/twitter/{user}"
         }
 
-        send_embed(fake, "❌ フォロー解除しました", 15158332)
+        send_embed(fake,"❌ フォロー解除しました",15158332)
 
     save_state(usernames)
 
 
-asyncio.run(main())
+if __name__ == "__main__":
+    main()
