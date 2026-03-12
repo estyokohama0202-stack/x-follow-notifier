@@ -16,7 +16,7 @@ MAX_SCROLL = 50
 async def get_following():
 
     users = {}
-    
+
     async with async_playwright() as p:
 
         browser = await p.chromium.launch(
@@ -24,11 +24,16 @@ async def get_following():
             args=["--no-sandbox", "--disable-dev-shm-usage"]
         )
 
-        page = await browser.new_page()
+        context = await browser.new_context(
+            storage_state="cookies.json"
+        )
+
+        page = await context.new_page()
 
         url = f"https://x.com/{TARGET}/following"
 
-        await page.goto(url, timeout=60000)
+        await page.goto(url)
+
         await page.wait_for_timeout(5000)
 
         last_height = 0
@@ -53,10 +58,12 @@ async def get_following():
                     continue
 
                 name = username
+
                 if name_el:
                     name = await name_el.inner_text()
 
                 icon = ""
+
                 if icon_el:
                     icon = await icon_el.get_attribute("src")
 
@@ -121,8 +128,6 @@ async def main():
     usernames = [u["username"] for u in following]
 
     old = load_state()
-
-    print("最新フォロー送信")
 
     for user in following[:10]:
         send_embed(user, "🆕 最近のフォロー", 3447003)
