@@ -1,6 +1,7 @@
 import os
 import json
 import asyncio
+import time
 import requests
 from playwright.async_api import async_playwright
 
@@ -8,6 +9,8 @@ TARGET = "shizenboueigun"
 WEBHOOK = os.getenv("DISCORD_WEBHOOK")
 
 STATE_FILE = "following.json"
+
+MAX_SCROLL = 10
 
 
 async def get_following():
@@ -21,35 +24,44 @@ async def get_following():
 
         url = f"https://x.com/{TARGET}/following"
 
-        await page.goto(url)
+        await page.goto(url, timeout=60000)
 
         await page.wait_for_timeout(5000)
 
+        for _ in range(MAX_SCROLL):
+
+            await page.mouse.wheel(0, 3000)
+            await page.wait_for_timeout(2000)
+
         cards = await page.query_selector_all("div[data-testid='UserCell']")
 
-        for card in cards[:20]:
+        for card in cards:
 
             name_el = await card.query_selector("div[dir='ltr'] span")
-            username_el = await card.query_selector("a")
+            username_el = await card.query_selector("a[href^='/']")
 
-            if name_el and username_el:
+            if not username_el:
+                continue
 
+            href = await username_el.get_attribute("href")
+
+            username = href.replace("/", "")
+
+            name = username
+            if name_el:
                 name = await name_el.inner_text()
-                href = await username_el.get_attribute("href")
 
-                username = href.replace("/", "")
+            icon_el = await card.query_selector("img")
 
-                icon_el = await card.query_selector("img")
+            icon = ""
+            if icon_el:
+                icon = await icon_el.get_attribute("src")
 
-                icon = ""
-                if icon_el:
-                    icon = await icon_el.get_attribute("src")
-
-                users.append({
-                    "name": name,
-                    "username": username,
-                    "icon": icon
-                })
+            users.append({
+                "name": name,
+                "username": username,
+                "icon": icon
+            })
 
         await browser.close()
 
@@ -67,20 +79,26 @@ def send_embed(user, title, color):
         "thumbnail": {"url": user["icon"]}
     }
 
-    requests.post(WEBHOOK, json={"embeds": [embed]})
+    try:
+        requests.post(WEBHOOK, json={"embeds": [embed]})
+        time.sleep(1)
+    except:
+        pass
 
 
 def load_state():
 
     if os.path.exists(STATE_FILE):
-        return json.load(open(STATE_FILE))
+        with open(STATE_FILE) as f:
+            return json.load(f)
 
     return []
 
 
 def save_state(data):
 
-    json.dump(data, open(STATE_FILE, "w"))
+    with open(STATE_FILE, "w") as f:
+        json.dump(data, f)
 
 
 async def main():
@@ -94,13 +112,11 @@ async def main():
     print("最新フォロー送信")
 
     for user in following[:10]:
-
         send_embed(user, "🆕 最近のフォロー", 3447003)
 
     new = [u for u in following if u["username"] not in old]
 
     for user in new:
-
         send_embed(user, "🆕 新しくフォローしました", 3066993)
 
     removed = [u for u in old if u not in usernames]
